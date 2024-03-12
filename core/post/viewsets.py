@@ -1,0 +1,65 @@
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework import status
+
+from core.abstract.viewsets import AbstractViewSet
+from core.post.models import Post
+from core.post.serializers import PostSerializer
+
+from rest_framework.decorators import action
+
+
+class PostViewSet(AbstractViewSet):
+    http_method_names = ('post', 'get', 'put', 'delete')
+    permission_classes = (IsAuthenticated, )
+    serializer_class = PostSerializer
+
+    # all posts
+    def get_queryset(self):
+        return Post.objects.all()
+
+    # retrieve a post by 'public_id'
+    def get_object(self):
+        obj = Post.objects.get_object_by_public_id(self.kwargs['pk'])
+        self.check_object_permissions(self.request, obj)
+        return obj
+
+    # create a post
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        return Response(
+            serializer.data,
+            status=status.HTTP_201_CREATED
+        )
+
+    @action(methods=['post'], detail=True)
+    def like(self, request, *args, **kwargs):
+        post = self.get_object()
+        user = self.request.user
+
+        user.like_post(post)
+        serializer = self.serializer_class(post)
+        return Response(
+            serializer.data,
+            status=status.HTTP_200_OK
+        )
+
+    @action(methods=['post'], detail=True)
+    def remove_like_post(self, request, *args, **kwargs):
+        post = self.get_object()
+        user = self.request.user
+
+        if not user.has_liked_post(post):
+            return Response(
+                {"detail": "User has not liked this post."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        user.remove_like_post(post)
+        serializer = self.serializer_class(post)
+        return Response(
+            serializer.data,
+            status=status.HTTP_200_OK
+        )
